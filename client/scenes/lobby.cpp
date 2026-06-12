@@ -1045,23 +1045,43 @@ void scenes::lobby::render(const XrFrameState & frame_state)
 
 	renderer::animate(world, frame_state.predictedDisplayPeriod * 1.0e-9);
 
-	world.get<components::node>(lobby_entity).visible = not application::get_config().passthrough_enabled;
+	// Live fov-crop preview: force the 3D environment (not passthrough) and apply the crop.
+	// When off, the background returns to whatever the Customize tab set.
+	const bool fov_preview = fov_crop_preview;
+	const bool show_passthrough = application::get_config().passthrough_enabled and not fov_preview;
 
-	render_start(application::get_config().passthrough_enabled, frame_state.predictedDisplayTime);
+	// While previewing, take the non-depth-test path so the controllers and rays render in the
+	// second (full-fov) pass instead of the cropped environment layer, leaving them uncropped.
+	const bool use_depth_test = composition_layer_depth_test_supported and not fov_preview;
 
-	const XrColor4f clear_color = application::get_config().passthrough_enabled ? XrColor4f{0, 0, 0, 0} : constants::lobby::sky_color;
+	world.get<components::node>(lobby_entity).visible = not show_passthrough;
+
+	render_start(show_passthrough, frame_state.predictedDisplayTime);
+
+	std::vector<XrView> preview_views;
+	std::span<XrView> env_views = views;
+	if (fov_preview)
+	{
+		preview_views.assign(views.begin(), views.end());
+		const auto & fov_crop = application::get_config().fov_crop;
+		for (size_t eye = 0; eye < preview_views.size(); ++eye)
+			preview_views[eye].fov = fov_crop.apply(views[eye].fov, eye == 1);
+		env_views = preview_views;
+	}
+
+	const XrColor4f clear_color = show_passthrough ? XrColor4f{0, 0, 0, 0} : constants::lobby::sky_color;
 	render_world(
 	        XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
 	        world_space,
-	        views,
+	        env_views,
 	        width,
 	        height,
-	        composition_layer_depth_test_supported,
-	        composition_layer_depth_test_supported ? layer_lobby | layer_controllers : layer_lobby,
+	        use_depth_test,
+	        use_depth_test ? layer_lobby | layer_controllers : layer_lobby,
 	        clear_color,
 	        true);
 
-	if (composition_layer_depth_test_supported)
+	if (use_depth_test)
 		set_depth_test(true, XR_COMPARE_OP_ALWAYS_FB);
 
 	bool dim_gui = imgui_ctx->is_modal_popup_shown() and composition_layer_color_scale_bias_supported;
@@ -1074,7 +1094,7 @@ void scenes::lobby::render(const XrFrameState & frame_state)
 			if (dim_gui)
 				set_color_scale_bias(constants::lobby::dimming_scale, constants::lobby::dimming_bias);
 
-			if (composition_layer_depth_test_supported)
+			if (use_depth_test)
 				set_depth_test(true, XR_COMPARE_OP_LESS_OR_EQUAL_FB);
 
 			dim_gui = false; // Only dim the main window
@@ -1087,11 +1107,11 @@ void scenes::lobby::render(const XrFrameState & frame_state)
 	        views,
 	        width,
 	        height,
-	        composition_layer_depth_test_supported,
-	        composition_layer_depth_test_supported ? layer_rays : layer_rays | layer_controllers,
+	        use_depth_test,
+	        use_depth_test ? layer_rays : layer_rays | layer_controllers,
 	        {0, 0, 0, 0});
 
-	if (composition_layer_depth_test_supported)
+	if (use_depth_test)
 		set_depth_test(true, XR_COMPARE_OP_LESS_OR_EQUAL_FB);
 
 	for (auto & [z_index, layer]: imgui_layers)

@@ -680,6 +680,13 @@ void scenes::lobby::gui_settings()
 	fov_window->WorkRect.Max.x = fov_saved_work_x;
 	if (fov_open)
 	{
+		// Group the expanded content so it can be outlined with a box (header stays outside).
+		ImGui::BeginGroup();
+		ImGui::Checkbox(_S("Live preview"), &fov_crop_preview);
+		if (ImGui::IsItemHovered())
+			imgui_ctx->tooltip(_("Preview the crop on the 3D environment (switches off passthrough while on)."));
+		imgui_ctx->vibrate_on_hover();
+
 		const int min_crop = config.extended_config ? 30 : 50; // percent, 1% granularity
 		const int max_crop = 100;
 
@@ -695,7 +702,7 @@ void scenes::lobby::gui_settings()
 		            &h,
 		            min_crop,
 		            max_crop,
-		            fmt::format(_F("{}%% - {}x{} per eye"), h, crop_w, crop_h).c_str()))
+		            fmt::format(_F("{}%%"), h).c_str()))
 		{
 			config.fov_crop.horizontal = std::clamp(h, min_crop, max_crop) / 100.0f;
 			config.save();
@@ -712,7 +719,7 @@ void scenes::lobby::gui_settings()
 		            &v,
 		            min_crop,
 		            max_crop,
-		            fmt::format(_F("{}%% - {}x{} per eye"), v, crop_w, crop_h).c_str()))
+		            fmt::format(_F("{}%%"), v).c_str()))
 		{
 			config.fov_crop.vertical = std::clamp(v, min_crop, max_crop) / 100.0f;
 			config.save();
@@ -774,8 +781,9 @@ void scenes::lobby::gui_settings()
 
 			// Size the eye boxes to the per-eye render aspect ratio, fit inside the canvas.
 			const float aspect = float(stream_view.recommendedImageRectWidth) / float(stream_view.recommendedImageRectHeight);
+			const float caption_h = ImGui::GetTextLineHeight() + 6.0f; // reserve space for the resolution
 			const float max_box_w = (canvas_w - 2 * pad - nose) / 2.0f;
-			const float max_box_h = canvas_h - 2 * pad;
+			const float max_box_h = canvas_h - 2 * pad - caption_h;
 			float box_w = max_box_w;
 			float box_h = box_w / aspect;
 			if (box_h > max_box_h)
@@ -784,7 +792,7 @@ void scenes::lobby::gui_settings()
 				box_w = box_h * aspect;
 			}
 			const float x0 = (canvas_w - (2 * box_w + nose)) * 0.5f; // centre horizontally
-			const float y0 = (canvas_h - box_h) * 0.5f;              // centre vertically
+			const float y0 = (canvas_h - caption_h - box_h) * 0.5f;  // centre vertically above the caption
 
 			const ImU32 col_box = IM_COL32(110, 110, 120, 255);
 			const ImU32 col_fill = IM_COL32(80, 160, 255, 70);
@@ -812,7 +820,20 @@ void scenes::lobby::gui_settings()
 			// left eye on the left, right eye on the right, nose gap in the middle
 			draw_eye(x0, false, "L");
 			draw_eye(x0 + box_w + nose, true, "R");
+
+			// resulting cropped resolution, centred under the eyes
+			const auto res_text = fmt::format(_F("{}x{} per eye"), crop_w, crop_h);
+			const float text_w = ImGui::CalcTextSize(res_text.c_str()).x;
+			draw_list->AddText({origin.x + (canvas_w - text_w) * 0.5f, origin.y + canvas_h - caption_h}, ImGui::GetColorU32(ImGuiCol_Text), res_text.c_str());
 		}
+		ImGui::EndGroup();
+
+		// Outline only the expanded content (header is outside the box).
+		const ImVec2 mn = ImGui::GetItemRectMin();
+		const ImVec2 mx = ImGui::GetItemRectMax();
+		const float p = ImGui::GetStyle().ItemSpacing.x;
+		ImGui::GetWindowDrawList()->AddRect({mn.x - p, mn.y - p}, {mx.x + p, mx.y + p}, IM_COL32(120, 120, 130, 200), ImGui::GetStyle().FrameRounding);
+		ImGui::Dummy(ImVec2(0, ImGui::GetStyle().ItemSpacing.y));
 	}
 
 	{

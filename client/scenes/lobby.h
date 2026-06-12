@@ -110,6 +110,9 @@ class lobby : public scene_impl<lobby>
 	bool recenter_gui = true;
 	void move_gui(glm::vec3 head_position, glm::vec3 new_gui_position);
 
+	// Apply the fov crop to the lobby's 3D scene as a live preview
+	bool fov_crop_preview = false;
+
 	enum class tab
 	{
 		first_run,
