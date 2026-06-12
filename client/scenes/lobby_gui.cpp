@@ -672,7 +672,7 @@ void scenes::lobby::gui_settings()
 		}
 	}
 
-	// FOV cropping. CollapsingHeader spans WorkRect.Max.x, so shrink it to the slider width.
+	// FOV cropping
 	auto * fov_window = ImGui::GetCurrentWindow();
 	const float fov_saved_work_x = fov_window->WorkRect.Max.x;
 	fov_window->WorkRect.Max.x = fov_window->DC.CursorPos.x + ImGui::CalcItemWidth();
@@ -680,17 +680,11 @@ void scenes::lobby::gui_settings()
 	fov_window->WorkRect.Max.x = fov_saved_work_x;
 	if (fov_open)
 	{
-		// Group the expanded content so it can be outlined with a box (header stays outside).
 		ImGui::BeginGroup();
-		ImGui::Checkbox(_S("Live preview"), &fov_crop_preview);
-		if (ImGui::IsItemHovered())
-			imgui_ctx->tooltip(_("Preview the crop on the 3D environment (switches off passthrough while on)."));
-		imgui_ctx->vibrate_on_hover();
 
 		const int min_crop = config.extended_config ? 30 : 50; // percent, 1% granularity
 		const int max_crop = 100;
 
-		// Resulting per-eye resolution, truncated like the uint16_t in stream.cpp.
 		const float eye_w = stream_view.recommendedImageRectWidth * config.resolution_scale;
 		const float eye_h = stream_view.recommendedImageRectHeight * config.resolution_scale;
 		const int crop_w = int(eye_w * config.fov_crop.horizontal);
@@ -765,25 +759,34 @@ void scenes::lobby::gui_settings()
 
 		// Preview diagram
 		{
-			const float h_crop = config.fov_crop.horizontal;
-			const float v_crop = config.fov_crop.vertical;
-			const float h_offset = config.fov_crop.horizontal_offset;
-			const float v_offset = config.fov_crop.vertical_offset;
-
 			const float canvas_w = ImGui::CalcItemWidth(); // match the slider-field width
-			const float canvas_h = 160.0f;
+			const float canvas_h = 180.0f;
 			const ImVec2 origin = ImGui::GetCursorScreenPos();
+			ImGui::SetNextItemAllowOverlap(); // let the button on top take clicks
 			ImGui::InvisibleButton("##fov_crop_diagram", ImVec2(canvas_w, canvas_h));
+			const bool canvas_active = ImGui::IsItemActive();
+			const bool canvas_activated = ImGui::IsItemActivated();
+			const bool canvas_hovered = ImGui::IsItemHovered();
+			imgui_ctx->vibrate_on_hover();
 			ImDrawList * draw_list = ImGui::GetWindowDrawList();
 
 			const float pad = 10.0f;
-			const float nose = 28.0f; // gap between the eye boxes (the nose)
+			const float nose = 28.0f;     // gap between the eye boxes (the nose)
+			const float text_gap = 16.0f; // gap between the eyes and the text
 
-			// Size the eye boxes to the per-eye render aspect ratio, fit inside the canvas.
+			const int saved_pct = (int)std::lround((1.0f - config.fov_crop.horizontal * config.fov_crop.vertical) * 100.0f);
+			const auto res_text = fmt::format(_F("{}x{} per eye"), crop_w, crop_h);
+			const auto saved_text = fmt::format(_F("{}% fewer pixels"), saved_pct);
+			const auto btn_label = std::string(ICON_FA_EYE "  ") + _("Live preview");
+			const ImVec2 btn_pad = {16.0f, 8.0f};
+			const float col_w = std::max({ImGui::CalcTextSize(res_text.c_str()).x,
+			                              ImGui::CalcTextSize(saved_text.c_str()).x,
+			                              ImGui::CalcTextSize(btn_label.c_str()).x + btn_pad.x * 2});
+
 			const float aspect = float(stream_view.recommendedImageRectWidth) / float(stream_view.recommendedImageRectHeight);
-			const float caption_h = ImGui::GetTextLineHeight() + 6.0f; // reserve space for the resolution
-			const float max_box_w = (canvas_w - 2 * pad - nose) / 2.0f;
-			const float max_box_h = canvas_h - 2 * pad - caption_h;
+			const float boxes_area_w = canvas_w - pad - text_gap - col_w;
+			const float max_box_w = (boxes_area_w - nose) / 2.0f;
+			const float max_box_h = canvas_h - 2 * pad;
 			float box_w = max_box_w;
 			float box_h = box_w / aspect;
 			if (box_h > max_box_h)
@@ -791,48 +794,108 @@ void scenes::lobby::gui_settings()
 				box_h = max_box_h;
 				box_w = box_h * aspect;
 			}
-			const float x0 = (canvas_w - (2 * box_w + nose)) * 0.5f; // centre horizontally
-			const float y0 = (canvas_h - caption_h - box_h) * 0.5f;  // centre vertically above the caption
+			const float boxes_w = 2 * box_w + nose;
+			const float x0 = pad + (boxes_area_w - boxes_w) * 0.5f; // centre the eyes in their area
+			const float y0 = (canvas_h - box_h) * 0.5f;
 
 			const ImU32 col_box = IM_COL32(110, 110, 120, 255);
 			const ImU32 col_fill = IM_COL32(80, 160, 255, 70);
 			const ImU32 col_edge = IM_COL32(90, 175, 255, 255);
 
-			auto draw_eye = [&](float bx, bool right_eye, const char * label) {
+			const float h_crop = config.fov_crop.horizontal;
+			const float v_crop = config.fov_crop.vertical;
+			const float cw = h_crop * box_w;
+			const float ch = v_crop * box_h;
+			const float room_x = box_w - cw;
+			const float room_y = box_h - ch;
+
+			// crop window being dragged
+			static int drag_eye = -1;
+			if (not canvas_active)
+				drag_eye = -1;
+
+			for (int eye = 0; eye < 2; ++eye)
+			{
+				const float h_offset = config.fov_crop.horizontal_offset;
+				const float v_offset = config.fov_crop.vertical_offset;
+				const float bx = (eye == 0) ? x0 : x0 + box_w + nose;
 				const ImVec2 b0(origin.x + bx, origin.y + y0);
 				const ImVec2 b1(b0.x + box_w, b0.y + box_h);
-				draw_list->AddRect(b0, b1, col_box, 3.0f);
-				draw_list->AddText(ImVec2(b0.x + 5, b0.y + 4), col_box, label);
-
-				const float cw = h_crop * box_w;
-				const float ch = v_crop * box_h;
-				const float room_x = box_w - cw;
-				const float room_y = box_h - ch;
-				const float sign = right_eye ? 1.0f : -1.0f; // mirror the horizontal offset
+				const float sign = (eye == 1) ? 1.0f : -1.0f; // mirror the horizontal offset
 				const float cx = b0.x + box_w * 0.5f + sign * h_offset * (room_x * 0.5f);
 				const float cy = b0.y + box_h * 0.5f - v_offset * (room_y * 0.5f);
 				const ImVec2 c0(cx - cw * 0.5f, cy - ch * 0.5f);
 				const ImVec2 c1(cx + cw * 0.5f, cy + ch * 0.5f);
-				draw_list->AddRectFilled(c0, c1, col_fill);
+
+				const ImVec2 m = ImGui::GetIO().MousePos;
+				const bool over = m.x >= c0.x and m.x <= c1.x and m.y >= c0.y and m.y <= c1.y;
+				if (canvas_activated and over)
+					drag_eye = eye;
+
+				const bool hot = (drag_eye == eye) or (drag_eye < 0 and canvas_hovered and over);
+				draw_list->AddRect(b0, b1, col_box, 3.0f);
+				draw_list->AddText(ImVec2(b0.x + 5, b0.y + 4), col_box, eye == 0 ? "L" : "R");
+				draw_list->AddRectFilled(c0, c1, hot ? IM_COL32(80, 160, 255, 120) : col_fill);
 				draw_list->AddRect(c0, c1, col_edge, 2.0f);
-			};
+			}
 
-			// left eye on the left, right eye on the right, nose gap in the middle
-			draw_eye(x0, false, "L");
-			draw_eye(x0 + box_w + nose, true, "R");
+			// dragging a crop window moves the offset
+			if (canvas_active and drag_eye >= 0)
+			{
+				const ImVec2 d = ImGui::GetIO().MouseDelta;
+				const float sign = (drag_eye == 1) ? 1.0f : -1.0f;
+				bool changed = false;
+				if (room_x > 1.0f and d.x != 0.0f)
+				{
+					config.fov_crop.horizontal_offset = std::clamp(config.fov_crop.horizontal_offset + sign * d.x * 2.0f / room_x, -1.0f, 1.0f);
+					changed = true;
+				}
+				if (room_y > 1.0f and d.y != 0.0f)
+				{
+					config.fov_crop.vertical_offset = std::clamp(config.fov_crop.vertical_offset - d.y * 2.0f / room_y, -1.0f, 1.0f);
+					changed = true;
+				}
+				if (changed)
+					config.save();
+			}
 
-			// resulting cropped resolution, centred under the eyes
-			const auto res_text = fmt::format(_F("{}x{} per eye"), crop_w, crop_h);
-			const float text_w = ImGui::CalcTextSize(res_text.c_str()).x;
-			draw_list->AddText({origin.x + (canvas_w - text_w) * 0.5f, origin.y + canvas_h - caption_h}, ImGui::GetColorU32(ImGuiCol_Text), res_text.c_str());
+			const float font_h = ImGui::GetTextLineHeight();
+			const float btn_h = font_h + 2 * btn_pad.y;
+			const float col_gap = 8.0f;
+			const float stack_h = btn_h + 2 * col_gap + 2 * font_h;
+			const float col_x = origin.x + canvas_w - col_w;
+			const float stack_top = origin.y + (canvas_h - stack_h) * 0.5f;
+
+			ImGui::SetCursorScreenPos({col_x, stack_top});
+			fov_crop_preview_shown = true;
+			const bool preview_on = fov_crop_preview;
+			if (preview_on)
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetColorU32(ImGuiCol_ButtonActive));
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, btn_pad);
+			if (ImGui::Button(btn_label.c_str()))
+				fov_crop_preview = not fov_crop_preview;
+			ImGui::PopStyleVar();
+			if (preview_on)
+				ImGui::PopStyleColor();
+			if (ImGui::IsItemHovered())
+				imgui_ctx->tooltip(_("Show the crop on the 3D environment (switches off passthrough while on)."));
+			imgui_ctx->vibrate_on_hover();
+			ImGui::SetCursorScreenPos({origin.x, origin.y + canvas_h});
+
+			const ImU32 text_col = ImGui::GetColorU32(ImGuiCol_Text);
+			const float text_y = stack_top + btn_h + col_gap;
+			draw_list->AddText({col_x, text_y}, text_col, res_text.c_str());
+			draw_list->AddText({col_x, text_y + font_h + col_gap}, text_col, saved_text.c_str());
 		}
 		ImGui::EndGroup();
 
-		// Outline only the expanded content (header is outside the box).
-		const ImVec2 mn = ImGui::GetItemRectMin();
-		const ImVec2 mx = ImGui::GetItemRectMax();
-		const float p = ImGui::GetStyle().ItemSpacing.x;
-		ImGui::GetWindowDrawList()->AddRect({mn.x - p, mn.y - p}, {mx.x + p, mx.y + p}, IM_COL32(120, 120, 130, 200), ImGui::GetStyle().FrameRounding);
+		// outline the expanded content (clip rect widened so the left edge shows)
+		const float p = 6.0f;
+		const ImVec2 box_min{ImGui::GetItemRectMin().x - p, ImGui::GetItemRectMin().y - p};
+		const ImVec2 box_max{ImGui::GetItemRectMax().x + p, ImGui::GetItemRectMax().y + p};
+		ImGui::PushClipRect(box_min, box_max, false);
+		ImGui::GetWindowDrawList()->AddRect(box_min, box_max, IM_COL32(120, 120, 130, 200), ImGui::GetStyle().FrameRounding);
+		ImGui::PopClipRect();
 		ImGui::Dummy(ImVec2(0, ImGui::GetStyle().ItemSpacing.y));
 	}
 
@@ -1899,6 +1962,7 @@ libcurl::curl_handle * scenes::lobby::try_get_download_handle(const std::string 
 std::vector<std::pair<int, XrCompositionLayerQuad>> scenes::lobby::draw_gui(XrTime predicted_display_time)
 {
 	imgui_ctx->new_frame(predicted_display_time);
+	fov_crop_preview_shown = false;
 	update_transfers();
 	update_file_picker();
 
@@ -2077,6 +2141,10 @@ std::vector<std::pair<int, XrCompositionLayerQuad>> scenes::lobby::draw_gui(XrTi
 		input->offset[xr::spaces::aim_right].first.z = ray_offset;
 	}
 #endif
+
+	// turn off the preview when its button isn't drawn
+	if (not fov_crop_preview_shown)
+		fov_crop_preview = false;
 
 	return imgui_ctx->end_frame();
 }

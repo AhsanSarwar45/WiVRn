@@ -1045,13 +1045,11 @@ void scenes::lobby::render(const XrFrameState & frame_state)
 
 	renderer::animate(world, frame_state.predictedDisplayPeriod * 1.0e-9);
 
-	// Live fov-crop preview: force the 3D environment (not passthrough) and apply the crop.
-	// When off, the background returns to whatever the Customize tab set.
+	// fov-crop preview: force the environment and apply the crop
 	const bool fov_preview = fov_crop_preview;
 	const bool show_passthrough = application::get_config().passthrough_enabled and not fov_preview;
 
-	// While previewing, take the non-depth-test path so the controllers and rays render in the
-	// second (full-fov) pass instead of the cropped environment layer, leaving them uncropped.
+	// preview uses the non-depth-test path so controllers and rays stay full-fov
 	const bool use_depth_test = composition_layer_depth_test_supported and not fov_preview;
 
 	world.get<components::node>(lobby_entity).visible = not show_passthrough;

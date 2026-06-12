@@ -63,9 +63,9 @@ public:
 	std::optional<float> minimum_refresh_rate;
 	float resolution_scale = 1.0;
 
-	// FOV cropping: shrinks the rendered fov (and render resolution) to save performance.
-	// Crop is the kept fraction of each axis; offset (-1..1) slides the kept window, mirrored
-	// per eye for horizontal so it pushes toward the nose to hide the inner edge.
+	// FOV cropping: shrink the rendered fov and resolution to save performance
+	// crop = kept fraction per axis, offset (-1..1) slides the kept window
+	// the offset is mirrored per eye horizontally so it pushes toward the nose
 	struct fov_crop_settings
 	{
 		float horizontal = 1.0f;

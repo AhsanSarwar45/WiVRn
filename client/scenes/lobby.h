@@ -112,6 +112,7 @@ class lobby : public scene_impl<lobby>
 
 	// Apply the fov crop to the lobby's 3D scene as a live preview
 	bool fov_crop_preview = false;
+	bool fov_crop_preview_shown = false; // button shown this frame, else preview is disabled
 
 	enum class tab
 	{
