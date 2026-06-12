@@ -200,6 +200,9 @@ std::shared_ptr<scenes::stream> scenes::stream::create(std::unique_ptr<wivrn_ses
 		        .variant = application::get_messages_info().variant,
 		};
 
+		const auto & config = application::get_config();
+		const auto & fov_crop = config.fov_crop;
+
 		{
 			auto [flags, views] = self->session.locate_views(
 			        XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
@@ -208,18 +211,16 @@ std::shared_ptr<scenes::stream> scenes::stream::create(std::unique_ptr<wivrn_ses
 
 			assert(views.size() == info.fov.size());
 
-			for (auto [i, j]: std::views::zip(views, info.fov))
-				j = i.fov;
+			for (size_t eye = 0; eye < info.fov.size(); ++eye)
+				info.fov[eye] = fov_crop.apply(views[eye].fov, eye == 1);
 		}
-
-		const auto & config = application::get_config();
 
 		{
 			auto view = self->system.view_configuration_views(self->viewconfig)[0];
 			view = application::get_hmd_traits().override_view(view);
 
-			info.render_eye_width = view.recommendedImageRectWidth * config.resolution_scale;
-			info.render_eye_height = view.recommendedImageRectHeight * config.resolution_scale;
+			info.render_eye_width = view.recommendedImageRectWidth * config.resolution_scale * fov_crop.width_scale();
+			info.render_eye_height = view.recommendedImageRectHeight * config.resolution_scale * fov_crop.height_scale();
 		}
 
 		{

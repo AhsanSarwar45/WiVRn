@@ -469,16 +469,18 @@ void scenes::stream::tracking()
 
 					switch (item.device)
 					{
-						case device_id::HEAD:
+						case device_id::HEAD: {
 							tracking.view_flags = session.locate_views(XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, tracking.timestamp, view_space, views);
 							assert(views.size() == tracking.views.size());
-							for (auto [i, j]: std::views::zip(views, tracking.views))
+							const auto & fov_crop = application::get_config().fov_crop;
+							for (size_t eye = 0; eye < tracking.views.size(); ++eye)
 							{
-								j.pose = i.pose;
-								j.fov = i.fov;
+								tracking.views[eye].pose = views[eye].pose;
+								tracking.views[eye].fov = fov_crop.apply(views[eye].fov, eye == 1);
 							}
 							locate_spaces.add_space(item.device, view_space, tracking.timestamp, tracking.device_poses);
 							break;
+						}
 						case wivrn::device_id::LEFT_GRIP:
 						case wivrn::device_id::LEFT_AIM:
 						case wivrn::device_id::LEFT_PALM:

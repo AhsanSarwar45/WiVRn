@@ -22,6 +22,7 @@
 #include "wivrn_discover.h"
 #include "wivrn_packets.h"
 
+#include <cmath>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -61,6 +62,55 @@ public:
 	float preferred_refresh_rate = 0;
 	std::optional<float> minimum_refresh_rate;
 	float resolution_scale = 1.0;
+
+	// FOV cropping: shrinks the rendered fov (and render resolution) to save performance.
+	// Crop is the kept fraction of each axis; offset (-1..1) slides the kept window, mirrored
+	// per eye for horizontal so it pushes toward the nose to hide the inner edge.
+	struct fov_crop_settings
+	{
+		float horizontal = 1.0f;
+		float vertical = 1.0f;
+		float horizontal_offset = 0.0f; // -1 = inner (nose), +1 = outer (temple)
+		float vertical_offset = 0.0f;   // -1 = down, +1 = up
+
+		bool is_cropped() const
+		{
+			return horizontal != 1.0f or vertical != 1.0f or horizontal_offset != 0.0f or vertical_offset != 0.0f;
+		}
+
+		// Crop and slide one axis in tangent space (offset +-1 = flush to the hi/lo edge).
+		static void apply_axis(float & lo, float & hi, float crop, float offset)
+		{
+			const float t0 = std::tan(lo);
+			const float t1 = std::tan(hi);
+			const float center = 0.5f * (t0 + t1);
+			const float half = 0.5f * (t1 - t0);
+			const float kept = crop * half;
+			const float shift = offset * (1.0f - crop) * half;
+			lo = std::atan(center + shift - kept);
+			hi = std::atan(center + shift + kept);
+		}
+
+		XrFovf apply(XrFovf fov, bool right_eye) const
+		{
+			const float h_off = right_eye ? horizontal_offset : -horizontal_offset;
+			apply_axis(fov.angleLeft, fov.angleRight, horizontal, h_off);
+			apply_axis(fov.angleDown, fov.angleUp, vertical, vertical_offset);
+			return fov;
+		}
+
+		// Offset keeps the window width, so resolution scales with the crop fraction only.
+		float width_scale() const
+		{
+			return horizontal;
+		}
+		float height_scale() const
+		{
+			return vertical;
+		}
+	};
+	fov_crop_settings fov_crop;
+
 	std::optional<wivrn::video_codec> codec;
 	uint32_t bitrate_bps = 50'000'000;
 	uint8_t bit_depth = 10;

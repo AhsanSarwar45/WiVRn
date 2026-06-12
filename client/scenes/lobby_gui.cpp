@@ -672,6 +672,149 @@ void scenes::lobby::gui_settings()
 		}
 	}
 
+	// FOV cropping. CollapsingHeader spans WorkRect.Max.x, so shrink it to the slider width.
+	auto * fov_window = ImGui::GetCurrentWindow();
+	const float fov_saved_work_x = fov_window->WorkRect.Max.x;
+	fov_window->WorkRect.Max.x = fov_window->DC.CursorPos.x + ImGui::CalcItemWidth();
+	const bool fov_open = ImGui::CollapsingHeader(_("FOV cropping").append("##fov_crop").c_str());
+	fov_window->WorkRect.Max.x = fov_saved_work_x;
+	if (fov_open)
+	{
+		const int min_crop = config.extended_config ? 30 : 50; // percent, 1% granularity
+		const int max_crop = 100;
+
+		// Resulting per-eye resolution, truncated like the uint16_t in stream.cpp.
+		const float eye_w = stream_view.recommendedImageRectWidth * config.resolution_scale;
+		const float eye_h = stream_view.recommendedImageRectHeight * config.resolution_scale;
+		const int crop_w = int(eye_w * config.fov_crop.horizontal);
+		const int crop_h = int(eye_h * config.fov_crop.vertical);
+
+		int h = std::lround(config.fov_crop.horizontal * 100);
+		if (ImGui::SliderInt(
+		            _("Horizontal FOV").append("##fov_crop_h").c_str(),
+		            &h,
+		            min_crop,
+		            max_crop,
+		            fmt::format(_F("{}%% - {}x{} per eye"), h, crop_w, crop_h).c_str()))
+		{
+			config.fov_crop.horizontal = std::clamp(h, min_crop, max_crop) / 100.0f;
+			config.save();
+		}
+		if (ImGui::IsItemHovered())
+			imgui_ctx->tooltip(_("Crops the horizontal field of view to render fewer pixels for more\n"
+			                     "performance. Lower values cut more from the sides.\n"
+			                     "Takes effect on reconnect."));
+		imgui_ctx->vibrate_on_hover();
+
+		int v = std::lround(config.fov_crop.vertical * 100);
+		if (ImGui::SliderInt(
+		            _("Vertical FOV").append("##fov_crop_v").c_str(),
+		            &v,
+		            min_crop,
+		            max_crop,
+		            fmt::format(_F("{}%% - {}x{} per eye"), v, crop_w, crop_h).c_str()))
+		{
+			config.fov_crop.vertical = std::clamp(v, min_crop, max_crop) / 100.0f;
+			config.save();
+		}
+		if (ImGui::IsItemHovered())
+			imgui_ctx->tooltip(_("Crops the vertical field of view to render fewer pixels for more\n"
+			                     "performance. Lower values cut more from the top and bottom\n"
+			                     "(useful for sim racing cockpits). Takes effect on reconnect."));
+		imgui_ctx->vibrate_on_hover();
+
+		int ho = std::lround(config.fov_crop.horizontal_offset * 100);
+		if (ImGui::SliderInt(
+		            _("Horizontal offset").append("##fov_crop_ho").c_str(),
+		            &ho,
+		            -max_crop,
+		            max_crop,
+		            fmt::format(_F("{}%%"), ho).c_str()))
+		{
+			config.fov_crop.horizontal_offset = std::clamp(ho, -max_crop, max_crop) / 100.0f;
+			config.save();
+		}
+		if (ImGui::IsItemHovered())
+			imgui_ctx->tooltip(_("Shifts each eye's crop sideways, mirrored between the eyes.\n"
+			                     "Negative pushes both crops toward the nose so there is no\n"
+			                     "distracting inner edge, positive pushes them toward the temples."));
+		imgui_ctx->vibrate_on_hover();
+
+		int vo = std::lround(config.fov_crop.vertical_offset * 100);
+		if (ImGui::SliderInt(
+		            _("Vertical offset").append("##fov_crop_vo").c_str(),
+		            &vo,
+		            -max_crop,
+		            max_crop,
+		            fmt::format(_F("{}%%"), vo).c_str()))
+		{
+			config.fov_crop.vertical_offset = std::clamp(vo, -max_crop, max_crop) / 100.0f;
+			config.save();
+		}
+		if (ImGui::IsItemHovered())
+			imgui_ctx->tooltip(_("Shifts the crop up or down.\n"
+			                     "Positive moves it up, negative moves it down."));
+		imgui_ctx->vibrate_on_hover();
+
+		// Preview diagram
+		{
+			const float h_crop = config.fov_crop.horizontal;
+			const float v_crop = config.fov_crop.vertical;
+			const float h_offset = config.fov_crop.horizontal_offset;
+			const float v_offset = config.fov_crop.vertical_offset;
+
+			const float canvas_w = ImGui::CalcItemWidth(); // match the slider-field width
+			const float canvas_h = 160.0f;
+			const ImVec2 origin = ImGui::GetCursorScreenPos();
+			ImGui::InvisibleButton("##fov_crop_diagram", ImVec2(canvas_w, canvas_h));
+			ImDrawList * draw_list = ImGui::GetWindowDrawList();
+
+			const float pad = 10.0f;
+			const float nose = 28.0f; // gap between the eye boxes (the nose)
+
+			// Size the eye boxes to the per-eye render aspect ratio, fit inside the canvas.
+			const float aspect = float(stream_view.recommendedImageRectWidth) / float(stream_view.recommendedImageRectHeight);
+			const float max_box_w = (canvas_w - 2 * pad - nose) / 2.0f;
+			const float max_box_h = canvas_h - 2 * pad;
+			float box_w = max_box_w;
+			float box_h = box_w / aspect;
+			if (box_h > max_box_h)
+			{
+				box_h = max_box_h;
+				box_w = box_h * aspect;
+			}
+			const float x0 = (canvas_w - (2 * box_w + nose)) * 0.5f; // centre horizontally
+			const float y0 = (canvas_h - box_h) * 0.5f;              // centre vertically
+
+			const ImU32 col_box = IM_COL32(110, 110, 120, 255);
+			const ImU32 col_fill = IM_COL32(80, 160, 255, 70);
+			const ImU32 col_edge = IM_COL32(90, 175, 255, 255);
+
+			auto draw_eye = [&](float bx, bool right_eye, const char * label) {
+				const ImVec2 b0(origin.x + bx, origin.y + y0);
+				const ImVec2 b1(b0.x + box_w, b0.y + box_h);
+				draw_list->AddRect(b0, b1, col_box, 3.0f);
+				draw_list->AddText(ImVec2(b0.x + 5, b0.y + 4), col_box, label);
+
+				const float cw = h_crop * box_w;
+				const float ch = v_crop * box_h;
+				const float room_x = box_w - cw;
+				const float room_y = box_h - ch;
+				const float sign = right_eye ? 1.0f : -1.0f; // mirror the horizontal offset
+				const float cx = b0.x + box_w * 0.5f + sign * h_offset * (room_x * 0.5f);
+				const float cy = b0.y + box_h * 0.5f - v_offset * (room_y * 0.5f);
+				const ImVec2 c0(cx - cw * 0.5f, cy - ch * 0.5f);
+				const ImVec2 c1(cx + cw * 0.5f, cy + ch * 0.5f);
+				draw_list->AddRectFilled(c0, c1, col_fill);
+				draw_list->AddRect(c0, c1, col_edge, 2.0f);
+			};
+
+			// left eye on the left, right eye on the right, nose gap in the middle
+			draw_eye(x0, false, "L");
+			draw_eye(x0 + box_w + nose, true, "R");
+		}
+	}
+
 	{
 		auto codec_name = [](const std::optional<wivrn::video_codec> codec) {
 			if (not codec)

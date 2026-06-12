@@ -147,6 +147,19 @@ configuration::configuration(xr::system & system, xr::session & session)
 		if (auto val = root["resolution_scale"]; val.is_double())
 			resolution_scale = val.get_double();
 
+		if (auto val = root["fov_crop"]; val.is_object())
+		{
+			auto obj = val.get_object();
+			if (auto v = obj["horizontal"]; v.is_double())
+				fov_crop.horizontal = v.get_double();
+			if (auto v = obj["vertical"]; v.is_double())
+				fov_crop.vertical = v.get_double();
+			if (auto v = obj["horizontal_offset"]; v.is_double())
+				fov_crop.horizontal_offset = v.get_double();
+			if (auto v = obj["vertical_offset"]; v.is_double())
+				fov_crop.vertical_offset = v.get_double();
+		}
+
 		if (auto val = root["stream_scale"]; val.is_double())
 			stream_scale = val.get_double();
 
@@ -286,6 +299,10 @@ void configuration::save()
 	if (minimum_refresh_rate)
 		json << ",\"minimum_refresh_rate\":" << *minimum_refresh_rate;
 	json << ",\"resolution_scale\":" << resolution_scale;
+	json << ",\"fov_crop\":{\"horizontal\":" << fov_crop.horizontal
+	     << ",\"vertical\":" << fov_crop.vertical
+	     << ",\"horizontal_offset\":" << fov_crop.horizontal_offset
+	     << ",\"vertical_offset\":" << fov_crop.vertical_offset << "}";
 	if (stream_scale)
 		json << ",\"stream_scale\":" << *stream_scale;
 	if (codec)
