@@ -55,7 +55,7 @@ namespace ui = wivrn::ui;
 
 namespace
 {
-constexpr float control_w = 480;
+constexpr float control_w = ui::metrics::setting_control_width;
 
 float toggle_width()
 {
@@ -99,7 +99,7 @@ struct setting
 
 void render_settings(const char * card_id, const std::vector<setting> & list)
 {
-	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {12, 10});
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ui::metrics::card_item_spacing);
 	ui::begin_card(card_id);
 
 	for (const auto & s: list)
@@ -179,8 +179,7 @@ void scenes::lobby::gui_performance()
 			        for (size_t i = 0; i < rates.size(); ++i)
 				        if (rates[i] == config.preferred_refresh_rate)
 					        return int(i) + 1;
-			        return 0;
-		        },
+			        return 0; },
 		        .set_int = [this, &config, rates](int v) {
 			        if (v == 0)
 			        {
@@ -192,15 +191,13 @@ void scenes::lobby::gui_performance()
 				        session.set_refresh_rate(rates[v - 1]);
 				        config.preferred_refresh_rate = rates[v - 1];
 			        }
-			        config.save();
-		        },
+			        config.save(); },
 		        .options = [rates] {
 			        std::vector<std::string> opts;
 			        opts.push_back(_C("automatic refresh rate", "Auto"));
 			        for (float r: rates)
 				        opts.push_back(fmt::format("{}", int(r)));
-			        return opts;
-		        },
+			        return opts; },
 		        .default_int = 0,
 		});
 	}
@@ -234,8 +231,7 @@ void scenes::lobby::gui_performance()
 		        if (not config.extended_config)
 			        v = std::clamp(v, 30, 80);
 		        config.set_stream_scale(1 - v * 0.01);
-		        config.save();
-	        },
+		        config.save(); },
 	        .v_min = 0,
 	        .v_max = 80,
 	        .fmt = "%d%%",
@@ -310,19 +306,16 @@ void scenes::lobby::gui_streaming()
 			        for (size_t i = 0; i < codecs.size(); ++i)
 				        if (codecs[i] == *config.codec)
 					        return int(i) + 1;
-		        return 0;
-	        },
+		        return 0; },
 	        .set_int = [&config, codecs](int v) {
 		        config.codec = v == 0 ? std::nullopt : std::optional(codecs[v - 1]);
-		        config.save();
-	        },
+		        config.save(); },
 	        .options = [codecs, codec_name] {
 		        std::vector<std::string> opts;
 		        opts.push_back(codec_name(std::nullopt));
 		        for (auto c: codecs)
 			        opts.push_back(codec_name(c));
-		        return opts;
-	        },
+		        return opts; },
 	        .title = _("Video codec"),
 	        .default_int = 0,
 	});
@@ -389,7 +382,7 @@ void scenes::lobby::gui_post_processing()
 			}
 		};
 
-		auto flag_combo = [&](const char * id, std::string label, std::string desc, std::array<XrCompositionLayerSettingsFlagsFB, 3> flags, XrCompositionLayerSettingsFlagsFB configuration::openxr_post_processing_settings::* member) {
+		auto flag_combo = [&](const char * id, std::string label, std::string desc, std::array<XrCompositionLayerSettingsFlagsFB, 3> flags, XrCompositionLayerSettingsFlagsFB configuration::openxr_post_processing_settings::*member) {
 			std::string title = label;
 			list.push_back({
 			        .id = id,
@@ -400,18 +393,15 @@ void scenes::lobby::gui_post_processing()
 				        for (size_t i = 0; i < flags.size(); ++i)
 					        if (config.openxr_post_processing.*member == flags[i])
 						        return int(i);
-				        return 0;
-			        },
+				        return 0; },
 			        .set_int = [&config, flags, member](int v) {
 				        config.openxr_post_processing.*member = flags[v];
-				        config.save();
-			        },
+				        config.save(); },
 			        .options = [flags, flag_name] {
 				        std::vector<std::string> o;
 				        for (auto f: flags)
 					        o.push_back(flag_name(f));
-				        return o;
-			        },
+				        return o; },
 			        .title = std::move(title),
 			        .default_int = 0,
 			});
@@ -554,20 +544,17 @@ void scenes::lobby::gui_system()
 			        for (size_t i = 0; i < languages.size(); ++i)
 				        if (std::get<2>(languages[i]) == config.locale)
 					        return int(i) + 1;
-		        return 0;
-	        },
+		        return 0; },
 	        .set_int = [&config, languages](int v) {
 		        config.locale = v == 0 ? "" : std::get<2>(languages[v - 1]);
 		        config.save();
-		        application::instance().load_locale();
-	        },
+		        application::instance().load_locale(); },
 	        .options = [languages] {
 		        std::vector<std::string> opts;
 		        opts.push_back(_C("language", "System language"));
 		        for (const auto & [lang, loc, code]: languages)
 			        opts.push_back(lang);
-		        return opts;
-	        },
+		        return opts; },
 	        .title = _("Language"),
 	        .default_int = 0,
 	});

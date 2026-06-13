@@ -97,7 +97,7 @@ constexpr float slider_grab_width = 14;
 
 constexpr float segmented_inset = 3; // gap around the active segment
 
-constexpr float icon_button_glyph = 0.58;   // glyph height as a fraction of the button side
+constexpr float icon_button_glyph = 0.58;  // glyph height as a fraction of the button side
 constexpr float button_label_glyph = 1.35; // leading icon size in a labeled button, x base text size
 
 constexpr float combo_row_height = 2.2;      // x frame height, big touch rows in the modal
@@ -115,6 +115,9 @@ constexpr float font_modal_title = 1.2;   // modal heading, x base font size
 constexpr float label_line_gap = 5;   // title to description
 constexpr float label_bottom_pad = 6; // breathing room below the description
 constexpr float nav_section_gap = 18; // space above a sidebar section header
+
+constexpr ImVec2 card_item_spacing = {12, 10}; // ItemSpacing pushed around a card section
+constexpr float setting_control_width = 480;   // width of the control in a setting row
 } // namespace metrics
 
 // Theme in effect, call current().apply() after mutating
