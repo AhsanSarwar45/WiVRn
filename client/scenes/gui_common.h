@@ -19,6 +19,11 @@
 
 #pragma once
 
+#include "render/ui_widgets.h"
+#include <optional>
+#include <string>
+#include <openxr/openxr.h>
+
 class configuration;
 class imgui_context;
 
@@ -43,6 +48,17 @@ bool refresh_rate(
 bool post_processing(
         imgui_context & imgui_ctx,
         configuration & config);
+
+// Battery pill shown in the top bar: the icon+percent label and the threshold colour.
+struct battery_indicator
+{
+	std::string label;
+	wivrn::ui::chip_style style;
+};
+
+// Current headset battery as a top-bar pill, or nullopt when unavailable (always nullopt
+// off Android). now drives the charging animation. Shared by the lobby and in-stream GUI.
+std::optional<battery_indicator> battery_status_indicator(XrTime now);
 
 } // namespace gui
 } // namespace wivrn
