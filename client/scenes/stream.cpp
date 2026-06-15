@@ -470,7 +470,7 @@ void scenes::stream::on_focused()
 	        session,
 	        device,
 	        swapchain_format,
-	        1800,
+	        2800,
 	        1200);
 
 	std::vector<imgui_context::viewport> vps{
@@ -487,6 +487,15 @@ void scenes::stream::on_focused()
 	                .vp_origin = {0, 1000},
 	                .vp_size = {1800, 200},
 	                .tooltip_viewport = true,
+	        },
+	        {
+	                // Pop up window: combos and modals float just in front of the main panel.
+	                // Position and orientation track the main panel each frame. Same pixel
+	                // density as the main panel (1500 px/m) so text matches.
+	                .space = xr::spaces::world,
+	                .size = {0.6667, 0.6},
+	                .vp_origin = {1800, 0},
+	                .vp_size = {1000, 900},
 	        },
 	};
 
